@@ -144,7 +144,7 @@ class Sqlserver extends DboSource {
 
 		try {
 			$this->_connection = new PDO(
-				"sqlsrv:server={$config['host']};Database={$config['database']}",
+				"sqlsrv:server={$config['host']};Database={$config['database']};Encrypt=0;ConnectionPooling=1",
 				$config['login'],
 				$config['password'],
 				$flags
@@ -797,7 +797,7 @@ class Sqlserver extends DboSource {
 		$this->_lastAffected = false;
 		$sql = trim($sql);
 		if (strncasecmp($sql, 'SELECT', 6) === 0 || preg_match('/^EXEC(?:UTE)?\s/mi', $sql) > 0) {
-			$prepareOptions += array(PDO::ATTR_CURSOR => PDO::CURSOR_SCROLL);
+			$prepareOptions += array(PDO::ATTR_CURSOR => PDO::CURSOR_FWDONLY);
 			return parent::_execute($sql, $params, $prepareOptions);
 		}
 		try {
