@@ -156,6 +156,7 @@ class Sqlserver extends DboSource {
 				}
 			}
 		} catch (PDOException $e) {
+			CakeLog::debug(sprintf('SQLServer DboSource Error: %s', $e->getMessage()));
 			throw new MissingConnectionException(array(
 				'class' => get_class($this),
 				'message' => $e->getMessage()
