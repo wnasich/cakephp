@@ -144,7 +144,7 @@ class Sqlserver extends DboSource {
 
 		try {
 			$this->_connection = new PDO(
-				"sqlsrv:server={$config['host']};Database={$config['database']};Encrypt=0;ConnectionPooling=1",
+				"sqlsrv:server={$config['host']};Database={$config['database']};Encrypt=0;ConnectionPooling=1;ConnectRetryCount=5;ConnectRetryInterval=10;LoginTimeout=60",
 				$config['login'],
 				$config['password'],
 				$flags
