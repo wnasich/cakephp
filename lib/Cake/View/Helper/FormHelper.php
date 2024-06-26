@@ -1267,6 +1267,7 @@ class FormHelper extends AppHelper {
 			if ($fieldKey === $primaryKey) {
 				$options['type'] = 'hidden';
 			}
+			/* MSSQL does not return the field type for decimals as MySQL does
 			if ($options['type'] === 'number' &&
 				!isset($options['step'])
 			) {
@@ -1277,6 +1278,7 @@ class FormHelper extends AppHelper {
 					$options['step'] = 'any';
 				}
 			}
+			*/
 		}
 
 		if (preg_match('/_id$/', $fieldKey) && $options['type'] !== 'hidden') {
