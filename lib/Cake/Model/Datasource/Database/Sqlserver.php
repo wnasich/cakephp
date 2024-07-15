@@ -700,6 +700,107 @@ class Sqlserver extends DboSource {
 	}
 
 /**
+ * Generates and executes an SQL ALTER TABLE statement for given Schema comparison
+ *
+ * @param array $compare Result of a CakeSchema::compare()
+ * @param string $table The table name to alter
+ * @return bool Success
+ */
+	public function alterSchema($compare, $table = null) {
+		if (!is_array($compare)) {
+			return false;
+		}
+		$out = '';
+		$colList = array();
+		foreach ($compare as $curTable => $types) {
+			$indexes = $tableParameters = $colList = array();
+			if (!$table || $table == $curTable) {
+				$out .= "ALTER TABLE " . $this->fullTableName($curTable) . " \n";
+				foreach ($types as $type => $column) {
+					if (isset($column['indexes'])) {
+						$indexes[$type] = $column['indexes'];
+						unset($column['indexes']);
+					}
+					if (isset($column['tableParameters'])) {
+						$tableParameters[$type] = $column['tableParameters'];
+						unset($column['tableParameters']);
+					}
+					switch ($type) {
+						case 'add':
+							foreach ($column as $field => $col) {
+								$col['name'] = $field;
+								$colList[] = 'ADD ' . $this->buildColumn($col);
+							}
+							break;
+						case 'drop':
+							foreach ($column as $field => $col) {
+								$col['name'] = $field;
+								$colList[] = 'DROP COLUMN ' . $this->name($field);
+							}
+							break;
+						case 'change':
+							foreach ($column as $field => $col) {
+								if (!isset($col['name'])) {
+									$col['name'] = $field;
+								}
+								$colList[] = 'ALTER COLUMN ' . $this->buildColumn($col);
+							}
+							break;
+					}
+				}
+
+				$colList = array_merge($colList, $this->_alterIndexes($curTable, $indexes));
+				$colList = array_merge($colList, $this->_alterTableParameters($curTable, $tableParameters));
+				$out .= "\t" . implode(",\n\t", $colList) . ";\n\n";
+			}
+		}
+
+		return $out;
+	}
+
+/**
+ * Returns an array of the indexes in given table name.
+ *
+ * @param string $model Name of model to inspect
+ * @return array Fields in table. Keys are column and unique
+ */
+	public function index($model) {
+		$index = array();
+		$table = $this->fullTableName($model, false, false);
+		$cols = $this->_execute(
+			"SELECT
+				i.name AS IndexName,
+				c.name AS ColumnName,
+				CASE WHEN i.is_unique = 1 THEN 'TRUE' ELSE 'FALSE' END AS IsUnique
+			FROM sys.indexes AS i
+			INNER JOIN sys.index_columns AS ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+			INNER JOIN sys.columns AS c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+			INNER JOIN sys.tables AS t ON i.object_id = t.object_id
+			WHERE t.name = ?
+			ORDER BY i.name, ic.key_ordinal",
+			array($table)
+		);
+
+		foreach ($cols as $row) {
+			if (!isset($index[$row['IndexName']])) {
+				$index[$row['IndexName']] = array(
+					'column' => $row['ColumnName'],
+					'unique' => $row['IsUnique'] === 'TRUE' ? 1 : 0
+				);
+			} else {
+				if (!is_array($index[$row['IndexName']]['column'])) {
+					$col = array($index[$row['IndexName']]['column']);
+				} else {
+					$col = $index[$row['IndexName']]['column'];
+				}
+				$col[] = $row['ColumnName'];
+				$index[$row['IndexName']]['column'] = $col;
+			}
+		}
+		return $index;
+	}
+
+/**
  * Generate a database-native column schema string
  *
  * @param array $column An array structured like the
@@ -751,6 +852,47 @@ class Sqlserver extends DboSource {
 			}
 		}
 		return $join;
+	}
+
+/**
+ * Generate MSSQL index alteration statements for a table.
+ *
+ * @param string $table Table to alter indexes for
+ * @param array $indexes Indexes to add and drop
+ * @return array Index alteration statements
+ */
+	protected function _alterIndexes($table, $indexes) {
+		$alter = array();
+		$table = $this->fullTableName($table);
+
+		if (isset($indexes['drop'])) {
+			foreach ($indexes['drop'] as $name => $value) {
+				if ($name === 'PRIMARY') {
+					$alter[] = 'ALTER TABLE ' . $table . ' DROP CONSTRAINT ' . $this->name($name);
+				} else {
+					$alter[] = 'DROP INDEX ' . $this->name($name) . ' ON ' . $table;
+				}
+			}
+		}
+		if (isset($indexes['add'])) {
+			foreach ($indexes['add'] as $name => $value) {
+				if ($name === 'PRIMARY') {
+					$alter[] = 'ALTER TABLE ' . $table . ' ADD PRIMARY KEY (' . $this->name($value['column']) . ')';
+				} else {
+					$indexType = '';
+					if (!empty($value['unique'])) {
+						$indexType = 'UNIQUE ';
+					}
+					if (is_array($value['column'])) {
+						$columns = implode(', ', array_map(array(&$this, 'name'), $value['column']));
+					} else {
+						$columns = $this->name($value['column']);
+					}
+					$alter[] = 'CREATE ' . $indexType . 'INDEX ' . $this->name($name) . ' ON ' . $table . ' (' . $columns . ')';
+				}
+			}
+		}
+		return $alter;
 	}
 
 /**
@@ -828,6 +970,34 @@ class Sqlserver extends DboSource {
  */
 	protected function _dropTable($table) {
 		return "IF OBJECT_ID('" . $this->fullTableName($table, false) . "', 'U') IS NOT NULL DROP TABLE " . $this->fullTableName($table) . ";";
+	}
+
+/**
+ * Generate SQL to alter table parameters
+ *
+ * @param string $table Table name
+ * @param array $parameters Table parameters
+ * @return array SQL statements
+ */
+	protected function _alterTableParameters($table, $parameters) {
+		$result = array();
+
+		if (isset($parameters['change'])) {
+			foreach ($parameters['change'] as $parameter => $value) {
+				switch (strtolower($parameter)) {
+					case 'charset':
+						// For MSSQL, we need to change the collation
+						$result[] = "ALTER TABLE $table COLLATE $value";
+						break;
+
+					default:
+						// Ignore unsupported parameters
+						break;
+				}
+			}
+		}
+
+		return $result;
 	}
 
 /**
