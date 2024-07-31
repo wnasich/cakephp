@@ -700,7 +700,7 @@ class Sqlserver extends DboSource {
 	}
 
 /**
- * Generates and executes an SQL ALTER TABLE statement for given Schema comparison
+ * Generates SQL statements for given Schema comparison
  *
  * @param array $compare Result of a CakeSchema::compare()
  * @param string $table The table name to alter
@@ -711,11 +711,11 @@ class Sqlserver extends DboSource {
 			return false;
 		}
 		$out = '';
+		$outIndexes = '';
 		$colList = array();
 		foreach ($compare as $curTable => $types) {
 			$indexes = $tableParameters = $colList = array();
 			if (!$table || $table == $curTable) {
-				$out .= "ALTER TABLE " . $this->fullTableName($curTable) . " \n";
 				foreach ($types as $type => $column) {
 					if (isset($column['indexes'])) {
 						$indexes[$type] = $column['indexes'];
@@ -749,13 +749,18 @@ class Sqlserver extends DboSource {
 					}
 				}
 
-				$colList = array_merge($colList, $this->_alterIndexes($curTable, $indexes));
-				$colList = array_merge($colList, $this->_alterTableParameters($curTable, $tableParameters));
-				$out .= "\t" . implode(",\n\t", $colList) . ";\n\n";
+				if ($colList) {
+					$out .= "ALTER TABLE " . $this->fullTableName($curTable) . " \n";
+
+					$colList = array_merge($colList, $this->_alterTableParameters($curTable, $tableParameters));
+					$out .= "\t" . implode(",\n\t", $colList) . ";\n\n";
+				}
+
+				$outIndexes .= implode(";\n", $this->_alterIndexes($curTable, $indexes)) . ";\n\n";
 			}
 		}
 
-		return $out;
+		return $out . $outIndexes;
 	}
 
 /**
