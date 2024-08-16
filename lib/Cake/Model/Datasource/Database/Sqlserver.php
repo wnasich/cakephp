@@ -756,7 +756,10 @@ class Sqlserver extends DboSource {
 					$out .= "\t" . implode(",\n\t", $colList) . ";\n\n";
 				}
 
-				$outIndexes .= implode(";\n", $this->_alterIndexes($curTable, $indexes)) . ";\n\n";
+				$alterIndexes = $this->_alterIndexes($curTable, $indexes);
+				if ($alterIndexes) {
+					$outIndexes .= implode(";\n", $alterIndexes) . ";\n\n";
+				}
 			}
 		}
 
