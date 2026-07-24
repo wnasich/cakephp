@@ -161,14 +161,23 @@ class Mysql extends DboSource {
 		$config = $this->config;
 		$this->connected = false;
 
+		// PDO::MYSQL_ATTR_* constants are deprecated in PHP 8.5; Pdo\Mysql class is available since PHP 8.1
+		if (class_exists('Pdo\Mysql')) {
+			$mysqlAttrUseBufferedQuery = Pdo\Mysql::ATTR_USE_BUFFERED_QUERY;
+			$mysqlAttrInitCommand = Pdo\Mysql::ATTR_INIT_COMMAND;
+		} else {
+			$mysqlAttrUseBufferedQuery = PDO::MYSQL_ATTR_USE_BUFFERED_QUERY;
+			$mysqlAttrInitCommand = PDO::MYSQL_ATTR_INIT_COMMAND;
+		}
+
 		$flags = $config['flags'] + array(
 			PDO::ATTR_PERSISTENT => $config['persistent'],
-			PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
+			$mysqlAttrUseBufferedQuery => true,
 			PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
 		);
 
 		if (!empty($config['encoding'])) {
-			$flags[PDO::MYSQL_ATTR_INIT_COMMAND] = 'SET NAMES ' . $config['encoding'];
+			$flags[$mysqlAttrInitCommand] = 'SET NAMES ' . $config['encoding'];
 		}
 		if (!empty($config['ssl_key']) && !empty($config['ssl_cert'])) {
 			$flags[PDO::MYSQL_ATTR_SSL_KEY] = $config['ssl_key'];
@@ -333,7 +342,7 @@ class Mysql extends DboSource {
  * Returns an array of the fields in given table name.
  *
  * @param Model|string $model Name of database table to inspect or model instance
- * @return array Fields in table. Keys are name and type
+ * @return array|bool Fields in table. Keys are name and type. Returns false if result is empty.
  * @throws CakeException
  */
 	public function describe($model) {
@@ -344,7 +353,7 @@ class Mysql extends DboSource {
 		}
 		$table = $this->fullTableName($model);
 
-		$fields = false;
+		$fields = array();
 		$cols = $this->_execute('SHOW FULL COLUMNS FROM ' . $table);
 		if (!$cols) {
 			throw new CakeException(__d('cake_dev', 'Could not describe table for %s', $table));
@@ -361,7 +370,8 @@ class Mysql extends DboSource {
 				$fields[$column->Field]['unsigned'] = $this->_unsigned($column->Type);
 			}
 			if (in_array($fields[$column->Field]['type'], array('timestamp', 'datetime')) &&
-				in_array(strtoupper($column->Default), array('CURRENT_TIMESTAMP', 'CURRENT_TIMESTAMP()'))
+				//Falling back to default empty string due to PHP8.1 deprecation notice.
+				in_array(strtoupper($column->Default ?? ""), array('CURRENT_TIMESTAMP', 'CURRENT_TIMESTAMP()'))
 			) {
 				$fields[$column->Field]['default'] = null;
 			}
@@ -382,6 +392,12 @@ class Mysql extends DboSource {
 		}
 		$this->_cacheDescription($key, $fields);
 		$cols->closeCursor();
+
+		//Fields must be an array for compatibility with PHP8.1 (deprecation notice) but also let's keep backwards compatibility for method.
+		if (count($fields) === 0) {
+			return false;
+		}
+
 		return $fields;
 	}
 
@@ -831,7 +847,7 @@ class Mysql extends DboSource {
  */
 	public function value($data, $column = null, $null = true) {
 		$value = parent::value($data, $column, $null);
-		if (is_numeric($value) && substr($column, 0, 3) === 'set') {
+		if (is_numeric($value) && $column !== null && str_starts_with($column, 'set')) {
 			return $this->_connection->quote($value);
 		}
 		return $value;

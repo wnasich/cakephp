@@ -204,7 +204,9 @@ class ErrorHandler {
  * @return bool true if error was handled
  */
 	public static function handleError($code, $description, $file = null, $line = null, $context = null) {
-		if (error_reporting() === 0) {
+		//PHP8 migration guide: https://www.php.net/manual/en/migration80.incompatible.php
+		//See: @ operator
+		if (!(error_reporting() & $code)) {
 			return false;
 		}
 		list($error, $log) = static::mapErrorCode($code);
@@ -298,10 +300,6 @@ class ErrorHandler {
 			case E_NOTICE:
 			case E_USER_NOTICE:
 				$error = 'Notice';
-				$log = LOG_NOTICE;
-				break;
-			case E_STRICT:
-				$error = 'Strict';
 				$log = LOG_NOTICE;
 				break;
 			case E_DEPRECATED:
