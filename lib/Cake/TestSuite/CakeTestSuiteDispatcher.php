@@ -149,7 +149,8 @@ class CakeTestSuiteDispatcher {
  * @return bool true if found, false otherwise
  */
 	public function loadTestFramework() {
-		if (class_exists('PHPUnit_Framework_TestCase')) {
+		// PHPUnit 9 installed through Composer: its classes are namespaced and autoloaded
+		if (class_exists('PHPUnit\Framework\TestCase')) {
 			return true;
 		}
 		$phpunitPath = 'phpunit' . DS . 'phpunit';
@@ -177,8 +178,10 @@ class CakeTestSuiteDispatcher {
 				return $included;
 			}
 		}
-		include 'PHPUnit' . DS . 'Autoload.php';
-		return class_exists('PHPUnit_Framework_TestCase');
+		if (stream_resolve_include_path('PHPUnit' . DS . 'Autoload.php')) {
+			include 'PHPUnit' . DS . 'Autoload.php';
+		}
+		return class_exists('PHPUnit\Framework\TestCase');
 	}
 
 /**
