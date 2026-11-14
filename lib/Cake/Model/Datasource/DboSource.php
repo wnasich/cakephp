@@ -2465,6 +2465,11 @@ class DboSource extends DataSource {
 				$this->logQuery('COMMIT');
 			}
 			$this->_transactionStarted = false;
+			// MySQL commits implicitly on DDL (e.g. migrations); since PHP 8.0 PDO::commit() throws
+			// when no transaction is open, while PHP 7 returned true. Keep the PHP 7 behavior.
+			if (!$this->_connection->inTransaction()) {
+				return true;
+			}
 			return $this->_connection->commit();
 		}
 
@@ -2509,6 +2514,10 @@ class DboSource extends DataSource {
 				$this->logQuery('ROLLBACK');
 			}
 			$this->_transactionStarted = false;
+			// See commit(): nothing to roll back after an implicit commit
+			if (!$this->_connection->inTransaction()) {
+				return true;
+			}
 			return $this->_connection->rollBack();
 		}
 
