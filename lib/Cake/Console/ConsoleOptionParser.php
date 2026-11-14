@@ -123,6 +123,13 @@ class ConsoleOptionParser {
  * @see ConsoleOptionParser::addSubcommand()
  * @var array
  */
+/**
+ * Tokens left to parse, used by parse() and the option parsing methods.
+ *
+ * @var array
+ */
+	protected $_tokens = array();
+
 	protected $_subcommands = array();
 
 /**
