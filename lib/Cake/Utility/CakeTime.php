@@ -1158,6 +1158,32 @@ class CakeTime {
 	}
 
 /**
+ * Expands the locale-preferred representations %x (date), %X (time) and %c (date and time)
+ * to the formats of the current LC_TIME locale, as the native strftime() did.
+ *
+ * The PHP81_BC\strftime polyfill renders them through ICU short formats instead
+ * (en_US: %x gives "1/17/25" where the native strftime() gave "01/17/2025").
+ *
+ * @param string $format strftime() format
+ * @return string Format with %x, %X and %c replaced by their locale formats
+ */
+	protected static function _expandLocaleFormats($format) {
+		if (strpos($format, '%') === false || !function_exists('nl_langinfo')) {
+			return $format;
+		}
+		$items = array('x' => D_FMT, 'X' => T_FMT, 'c' => D_T_FMT);
+
+		return preg_replace_callback('/%([%xXc])/', function ($match) use ($items) {
+			if ($match[1] === '%') {
+				return '%%';
+			}
+			$localeFormat = nl_langinfo($items[$match[1]]);
+
+			return ($localeFormat === false || $localeFormat === '') ? $match[0] : $localeFormat;
+		}, $format);
+	}
+
+/**
  * Multibyte wrapper for strftime.
  *
  * Handles utf8_encoding the result of strftime when necessary.
@@ -1167,7 +1193,7 @@ class CakeTime {
  * @return string formatted string with correct encoding.
  */
 	protected static function _strftime($format, $timestamp) {
-		$format = PHP81_BC\strftime($format, $timestamp);
+		$format = PHP81_BC\strftime(static::_expandLocaleFormats($format), $timestamp);
 
 		$encoding = Configure::read('App.encoding');
 		if (!empty($encoding) && $encoding === 'UTF-8') {
